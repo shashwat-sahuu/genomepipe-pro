@@ -1,17 +1,21 @@
 {
   "version": 2,
   "builds": [
-    { "src": "project/backend/app/main.py", "use": "@vercel/python" },
-    { "src": "project/frontend/**/*", "use": "@vercel/static" }
+    {
+      "src": "project/backend/app/main.py",
+      "use": "@vercel/python",
+      "config": {
+        "runtime": "python3.11"
+      }
+    },
+    {
+      "src": "project/frontend/**/*",
+      "use": "@vercel/static"
+    }
   ],
   "routes": [
-    { "src": "^/api/(.*)$", "dest": "/project/backend/app/main.py" },
-    { "src": "^/$", "dest": "/project/frontend/index.html" },
-    { "src": "^/(.*)$", "dest": "/project/frontend/$1" }
-  ],
-  "functions": {
-    "project/backend/app/main.py": {
-      "runtime": "python3.11"
-    }
-  }
+    { "src": "^/api/(.*)$", "dest": "project/backend/app/main.py" },
+    { "src": "^/$", "dest": "project/frontend/index.html" },
+    { "src": "^/(.*)$", "dest": "project/frontend/$1" }
+  ]
 }
