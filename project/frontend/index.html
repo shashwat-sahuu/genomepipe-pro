@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>GenomePipe Pro</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+  <script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+  <style>
+    :root {
+      --bg: #f7f6f2;
+      --surface: #ffffff;
+      --border: #e8e5de;
+      --accent: #2d6a4f;
+      --accent-light: #d8f3dc;
+      --text-primary: #1a1a1a;
+      --text-secondary: #6b6b6b;
+      --text-muted: #a0a0a0;
+      --error: #c0392b;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    /* subtle dot grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: radial-gradient(circle, #c8c4b8 1px, transparent 1px);
+      background-size: 28px 28px;
+      opacity: 0.35;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 28px 48px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .header-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .logo-dot {
+      width: 10px;
+      height: 10px;
+      background: var(--accent);
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: 22px;
+      color: var(--text-primary);
+      letter-spacing: 0.3px;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 300;
+      letter-spacing: 0.5px;
+      margin-left: auto;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 48px auto;
+      padding: 0 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .input-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 32px 36px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .input-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .input-section input {
+      flex: 1;
+      padding: 13px 18px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-family: 'DM Mono', monospace;
+      font-weight: 400;
+      letter-spacing: 1.5px;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .input-section input::placeholder {
+      color: var(--text-muted);
+      font-weight: 300;
+      letter-spacing: 1px;
+    }
+
+    .input-section input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(45, 106, 79, 0.08);
+    }
+
+    button {
+      padding: 13px 28px;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      font-size: 13px;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    button:hover { background: #245a42; }
+    button:active { transform: scale(0.98); }
+    button:disabled { background: #b0c8bc; cursor: not-allowed; transform: none; }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+
+    .result-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px 24px;
+      box-shadow: var(--shadow);
+      transition: border-color 0.2s;
+    }
+
+    .result-card:hover {
+      border-color: #c8d8c8;
+    }
+
+    .result-card h3 {
+      font-size: 10px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .card-badge {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      margin-right: 7px;
+      vertical-align: middle;
+      position: relative;
+      top: -1px;
+    }
+
+    .badge-dna { background: #4a90d9; }
+    .badge-rna { background: #e67e22; }
+    .badge-protein { background: var(--accent); }
+
+    .result-card p {
+      font-family: 'DM Mono', monospace;
+      font-size: 13px;
+      font-weight: 400;
+      color: var(--text-primary);
+      word-break: break-all;
+      line-height: 1.7;
+    }
+
+    #viewer-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px 36px;
+      display: none;
+      box-shadow: var(--shadow);
+    }
+
+    #viewer-section h2 {
+      font-size: 10px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    #viewer {
+      width: 100%;
+      height: 480px;
+      border-radius: 10px;
+      background: #f0efea;
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #status {
+      margin-top: 14px;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 400;
+      text-align: center;
+      min-height: 18px;
+      letter-spacing: 0.3px;
+    }
+
+    .loading { color: var(--accent) !important; }
+    .error { color: var(--error) !important; }
+
+    /* fade-in animation */
+    .fade-in {
+      animation: fadeIn 0.35s ease forwards;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 700px) {
+      .results-grid { grid-template-columns: 1fr; }
+      header { padding: 20px 24px; }
+      header p { display: none; }
+      .input-row { flex-direction: column; }
+      .input-section { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="logo-dot"></div>
+    <h1>GenomePipe Pro</h1>
+    <p>DNA → RNA → Protein → 3D Structure</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="input-section">
+    <div class="section-label">DNA Sequence</div>
+    <div class="input-row">
+      <input type="text" id="dna-input" placeholder="e.g. ATGGTTTTTGAA" />
+      <button id="run-btn" onclick="runPipeline()">Run Pipeline</button>
+    </div>
+  </div>
+
+  <div class="results-grid" id="results-grid" style="display:none">
+    <div class="result-card fade-in">
+      <h3><span class="card-badge badge-dna"></span>DNA</h3>
+      <p id="dna-out">—</p>
+    </div>
+    <div class="result-card fade-in" style="animation-delay:0.05s">
+      <h3><span class="card-badge badge-rna"></span>RNA</h3>
+      <p id="rna-out">—</p>
+    </div>
+    <div class="result-card fade-in" style="animation-delay:0.1s">
+      <h3><span class="card-badge badge-protein"></span>Protein</h3>
+      <p id="protein-out">—</p>
+    </div>
+  </div>
+
+  <div id="viewer-section">
+    <h2>3D Protein Structure &nbsp;·&nbsp; ESMFold AI</h2>
+    <div id="viewer"></div>
+    <p id="status"></p>
+  </div>
+
+</div>
+
+<script>
+async function runPipeline() {
+  const dna = document.getElementById("dna-input").value.trim();
+  if (!dna) return alert("Please enter a DNA sequence!");
+
+  const btn = document.getElementById("run-btn");
+  const status = document.getElementById("status");
+
+  btn.disabled = true;
+  btn.textContent = "Running…";
+  status.textContent = "Calling pipeline…";
+  status.className = "loading";
+
+  try {
+    const res = await fetch(`http://127.0.0.1:8000/process?dna=${dna}`, {
+      method: "POST"
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || "Server error");
+    }
+
+    const data = await res.json();
+
+    document.getElementById("results-grid").style.display = "grid";
+    document.getElementById("dna-out").textContent = data.dna;
+    document.getElementById("rna-out").textContent = data.rna;
+    document.getElementById("protein-out").textContent = data.protein;
+
+    status.textContent = "Rendering 3D structure…";
+    document.getElementById("viewer-section").style.display = "block";
+
+    const pdbRes = await fetch(`http://127.0.0.1:8000/structure?dna=${dna}`, {
+      method: "POST"
+    });
+    const pdbText = await pdbRes.text();
+
+    render3D(pdbText);
+    status.textContent = "✓ Structure rendered successfully";
+    status.className = "";
+
+  } catch (err) {
+    status.textContent = "Error: " + err.message;
+    status.className = "error";
+  }
+
+  btn.disabled = false;
+  btn.textContent = "Run Pipeline";
+}
+
+function render3D(pdbData) {
+  const viewer = $3Dmol.createViewer("viewer", {
+    backgroundColor: "#f0efea"
+  });
+  viewer.addModel(pdbData, "pdb");
+  viewer.setStyle({}, { cartoon: { colorscheme: "spectrum" } });
+  viewer.zoomTo();
+  viewer.render();
+}
+</script>
+
+</body>
+</html>
