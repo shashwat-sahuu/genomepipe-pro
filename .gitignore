@@ -12,3 +12,8 @@ node_modules/
 .DS_Store
 .vercel
 .env*.local
+*.log
+*.db
+uploads/
+project/backend/uploads/
+project/backend/*.db

@@ -1,9 +1,8 @@
 """SQLAlchemy ORM models for database entities"""
 from datetime import datetime
-from typing import Optional
 
-from sqlalchemy import DateTime, String, Text, Enum, Float, JSON, Integer, ForeignKey, Boolean, Index
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import relationship
 import enum
 import uuid
@@ -16,15 +15,15 @@ class User(Base):
 
     __tablename__ = "users"
 
-    id = String(36, primary_key=True, default=lambda: str(uuid.uuid4()))
-    email = String(255, unique=True, nullable=False, index=True)
-    username = String(100, unique=True, nullable=False)
-    password_hash = String(255, nullable=False)
-    full_name = String(255)
-    is_active = Boolean(default=True)
-    is_admin = Boolean(default=False)
-    created_at = DateTime(timezone=True, default=datetime.utcnow)
-    updated_at = DateTime(timezone=True, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    username = Column(String(100), unique=True, nullable=False)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(255))
+    is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     sequences = relationship("Sequence", back_populates="user", cascade="all, delete-orphan")
@@ -42,16 +41,16 @@ class Sequence(Base):
 
     __tablename__ = "sequences"
 
-    id = String(36, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = String(36, ForeignKey("users.id"), nullable=False)
-    name = String(255, nullable=False)
-    description = Text()
-    sequence_type = String(20, nullable=False)  # DNA, RNA, PROTEIN
-    sequence_data = Text(nullable=False)
-    length = Integer(nullable=False)
-    gc_content = Float()
-    created_at = DateTime(timezone=True, default=datetime.utcnow)
-    metadata = JSON(default=dict)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    description = Column(Text)
+    sequence_type = Column(String(20), nullable=False)  # DNA, RNA, PROTEIN
+    sequence_data = Column(Text, nullable=False)
+    length = Column(Integer, nullable=False)
+    gc_content = Column(Float)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    meta = Column("metadata", JSON, default=dict)
 
     # Relationships
     user = relationship("User", back_populates="sequences")
@@ -78,19 +77,19 @@ class AnalysisJob(Base):
 
     __tablename__ = "analysis_jobs"
 
-    id = String(36, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = String(36, ForeignKey("users.id"), nullable=False)
-    sequence_id = String(36, ForeignKey("sequences.id"), nullable=True)
-    job_type = String(50, nullable=False)  # DNA_ANALYSIS, TRANSLATION, ORF_DETECTION
-    status = String(20, default=JobStatus.PENDING.value)
-    description = Text()
-    created_at = DateTime(timezone=True, default=datetime.utcnow)
-    started_at = DateTime(timezone=True)
-    completed_at = DateTime(timezone=True)
-    result_json = JSON()
-    error_message = Text()
-    celery_task_id = String(255)
-    progress_percentage = Integer(default=0)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    sequence_id = Column(String(36), ForeignKey("sequences.id"), nullable=True)
+    job_type = Column(String(50), nullable=False)  # DNA_ANALYSIS, TRANSLATION, ORF_DETECTION
+    status = Column(String(20), default=JobStatus.PENDING.value)
+    description = Column(Text)
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    started_at = Column(DateTime(timezone=True))
+    completed_at = Column(DateTime(timezone=True))
+    result_json = Column(JSON)
+    error_message = Column(Text)
+    celery_task_id = Column(String(255))
+    progress_percentage = Column(Integer, default=0)
 
     # Relationships
     user = relationship("User", back_populates="analysis_jobs")
@@ -108,18 +107,18 @@ class StructurePrediction(Base):
 
     __tablename__ = "structure_predictions"
 
-    id = String(36, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = String(36, ForeignKey("users.id"), nullable=False)
-    protein_sequence = Text(nullable=False)
-    model_used = String(100, default="ESMFold")
-    status = String(20, default=JobStatus.PENDING.value)
-    pdb_data = Text()
-    confidence_scores = JSON()
-    metadata = JSON()
-    celery_task_id = String(255)
-    created_at = DateTime(timezone=True, default=datetime.utcnow)
-    completed_at = DateTime(timezone=True)
-    error_message = Text()
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    protein_sequence = Column(Text, nullable=False)
+    model_used = Column(String(100), default="ESMFold")
+    status = Column(String(20), default=JobStatus.PENDING.value)
+    pdb_data = Column(Text)
+    confidence_scores = Column(JSON)
+    meta = Column("metadata", JSON, default=dict)
+    celery_task_id = Column(String(255))
+    created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+    completed_at = Column(DateTime(timezone=True))
+    error_message = Column(Text)
 
     # Relationships
     user = relationship("User", back_populates="structure_predictions")

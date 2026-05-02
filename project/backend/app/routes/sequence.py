@@ -18,15 +18,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.post("/api/analyze")
+@router.post("/analyze")
 async def analyze_sequence(
     request: AnalysisRequest
 ) -> AnalysisResultResponse:
     """
     Comprehensive DNA sequence analysis
-    
+
     Performs:
-    - DNA → RNA → Protein translation
+    - DNA to RNA to Protein translation
     - ORF (Open Reading Frame) detection
     - Codon usage analysis
     - Restriction site identification
@@ -47,20 +47,20 @@ async def analyze_sequence(
                     "position": position,
                 }
             )
-        
+
         # Perform comprehensive analysis
         analysis = SequenceAnalysisService.comprehensive_analysis(
             dna_sequence=request.sequence_data,
             include_reverse=request.include_reverse_complement,
             reading_frames=request.reading_frames,
         )
-        
+
         # Extract results
         stats = analysis["sequence_stats"]
         conversions = analysis["conversions"]
         orfs = analysis["orfs"]
         translations = analysis["translations"]
-        
+
         return AnalysisResultResponse(
             dna=conversions["dna"],
             rna=conversions["rna"],
@@ -69,10 +69,12 @@ async def analyze_sequence(
             gc_content=stats["gc_content"],
             sequence_length=stats["length"],
             translation_frames=translations,
-            stop_codon_positions=[i * 3 for i in range(len(conversions["protein"])) 
+            stop_codon_positions=[i * 3 for i in range(len(conversions["protein"]))
                                  if conversions["protein"][i] == "*"],
         )
-    
+
+    except HTTPException:
+        raise
     except ValueError as e:
         logger.error(f"Validation error: {e}")
         raise HTTPException(status_code=422, detail=str(e))
@@ -81,14 +83,14 @@ async def analyze_sequence(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/api/translate")
+@router.post("/translate")
 async def translate_dna(
     sequence: str = Query(..., min_length=3, max_length=1000000),
     frame: int = Query(1, ge=1, le=3),
 ) -> dict:
     """
     Translate DNA sequence to protein using specified reading frame
-    
+
     Parameters:
     - sequence: DNA sequence (ATGC only)
     - frame: Reading frame (1, 2, or 3)
@@ -97,9 +99,9 @@ async def translate_dna(
         is_valid, error_msg, position = SequenceAnalysisService.validate_dna_sequence(sequence)
         if not is_valid:
             raise HTTPException(status_code=422, detail=f"{error_msg} at position {position}")
-        
+
         protein = SequenceAnalysisService.translate_sequence(sequence, frame)
-        
+
         return {
             "dna_length": len(sequence),
             "frame": frame,
@@ -107,28 +109,28 @@ async def translate_dna(
             "protein_length": len(protein),
             "contains_stop_codon": "*" in protein,
         }
-    
+
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@router.post("/api/find-orfs")
+@router.post("/find-orfs")
 async def find_open_reading_frames(
     sequence: str = Query(..., min_length=3, max_length=1000000),
     min_length: int = Query(100, ge=30, le=10000),
 ) -> dict:
     """
     Find all Open Reading Frames (ORFs) in DNA sequence
-    
+
     Returns ORFs in all 6 reading frames (3 forward + 3 reverse complement)
     """
     try:
         is_valid, error_msg, position = SequenceAnalysisService.validate_dna_sequence(sequence)
         if not is_valid:
             raise HTTPException(status_code=422, detail=f"{error_msg} at position {position}")
-        
+
         orfs = SequenceAnalysisService.find_orfs(sequence, min_length)
-        
+
         return {
             "total_orfs": len(orfs),
             "min_orf_length": min_length,
@@ -147,12 +149,12 @@ async def find_open_reading_frames(
                 for orf in orfs[:50]  # Return top 50 ORFs
             ],
         }
-    
+
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@router.get("/api/gc-content")
+@router.get("/gc-content")
 async def get_gc_content(
     sequence: str = Query(..., min_length=1, max_length=1000000),
 ) -> dict:
@@ -161,10 +163,10 @@ async def get_gc_content(
         is_valid, error_msg, position = SequenceAnalysisService.validate_dna_sequence(sequence)
         if not is_valid:
             raise HTTPException(status_code=422, detail=f"{error_msg} at position {position}")
-        
+
         gc = SequenceAnalysisService.calculate_gc_content(sequence)
         sequence_upper = sequence.upper()
-        
+
         return {
             "sequence_length": len(sequence),
             "gc_content": gc,
@@ -174,12 +176,12 @@ async def get_gc_content(
             "a_count": sequence_upper.count("A"),
             "t_count": sequence_upper.count("T"),
         }
-    
+
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@router.post("/api/restriction-sites")
+@router.post("/restriction-sites")
 async def find_restriction_sites(
     sequence: str = Query(..., min_length=1, max_length=1000000),
 ) -> dict:
@@ -188,15 +190,15 @@ async def find_restriction_sites(
         is_valid, error_msg, position = SequenceAnalysisService.validate_dna_sequence(sequence)
         if not is_valid:
             raise HTTPException(status_code=422, detail=f"{error_msg} at position {position}")
-        
+
         sites = SequenceAnalysisService.find_restriction_sites(sequence)
-        
+
         return {
             "sequence_length": len(sequence),
             "restriction_sites_found": len(sites),
             "sites": sites,
         }
-    
+
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -205,28 +207,28 @@ async def find_restriction_sites(
 async def process_dna(dna: str):
     """
     Legacy endpoint for backward compatibility
-    
+
     Process DNA sequence and return complete analysis
     """
     try:
         is_valid, error_msg, position = SequenceAnalysisService.validate_dna_sequence(dna)
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
-        
+
         dna = dna.upper()
         rna = SequenceAnalysisService.dna_to_rna(dna)
         protein = SequenceAnalysisService.translate_sequence(dna, 1)
-        
+
         # Simple mock structure for backward compatibility
         structure = StructurePredictionService.generate_mock_pdb(protein)
-        
+
         return {
             "dna": dna,
             "rna": rna,
             "protein": protein,
             "structure": structure,
         }
-    
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -235,20 +237,20 @@ async def process_dna(dna: str):
 async def analyze_structure(dna: str):
     """
     Legacy endpoint for backward compatibility
-    
+
     Predict protein structure from DNA sequence
     """
     try:
         is_valid, error_msg, position = SequenceAnalysisService.validate_dna_sequence(dna)
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
-        
+
         dna = dna.upper()
         protein = SequenceAnalysisService.translate_sequence(dna, 1)
         pdb = StructurePredictionService.generate_mock_pdb(protein)
-        
+
         from fastapi.responses import PlainTextResponse
         return PlainTextResponse(pdb)
-    
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

@@ -3,6 +3,7 @@ import os
 from functools import lru_cache
 from typing import Optional
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -12,20 +13,20 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "GenomePipe Pro"
     APP_VERSION: str = "1.0.0"
-    DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
+    DEBUG: bool = Field(False, validation_alias="GENOMEPIPE_DEBUG")
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
 
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8000
-    RELOAD: bool = DEBUG
+    RELOAD: bool = False
 
     # Database
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
         "postgresql://postgres:password@localhost:5432/genomepipe",
     )
-    DB_ECHO: bool = DEBUG
+    DB_ECHO: bool = False
 
     # Redis
     REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
@@ -71,6 +72,9 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: list[str] = [
+        "http://127.0.0.1:8000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8080",
         "http://localhost:3000",
         "http://localhost:8080",
         "https://genomepipe-pro.vercel.app",

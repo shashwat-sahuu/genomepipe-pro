@@ -14,8 +14,9 @@ import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 
 from app.config import get_settings, init_upload_dir
-from app.routes import sequence
+from app.routes import sequence, auth, upload, structure
 from app.models.schemas import ErrorResponse
+from app.models.db_manager import DatabaseManager
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -32,6 +33,9 @@ if settings.SENTRY_DSN:
 # Initialize upload directory
 init_upload_dir()
 
+# Initialize database
+DatabaseManager.create_tables()
+
 # Create FastAPI application
 app = FastAPI(
     title=settings.APP_NAME,
@@ -40,6 +44,20 @@ app = FastAPI(
     docs_url="/docs",
     openapi_url="/openapi.json",
 )
+
+
+# Startup and shutdown events
+@app.on_event("startup")
+async def startup_event():
+    """Initialize on startup"""
+    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    logger.info(f"Shutting down {settings.APP_NAME}")
+    DatabaseManager.close()
 
 # Configure rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -65,6 +83,9 @@ async def log_requests(request: Request, call_next):
 
 # Include routers
 app.include_router(sequence.router, prefix="/api", tags=["Sequence Analysis"])
+app.include_router(auth.router, prefix="/api", tags=["Authentication"])
+app.include_router(upload.router, prefix="/api", tags=["Sequences"])
+app.include_router(structure.router, prefix="/api", tags=["Structure Prediction"])
 
 # Global exception handler
 @app.exception_handler(Exception)
@@ -84,16 +105,19 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Health check endpoint
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint with system status"""
+    db_status = "healthy" if DatabaseManager.health_check() else "unhealthy"
+
     return {
         "status": "healthy",
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
+        "database": db_status,
     }
 
-# Root endpoint
-@app.get("/")
-async def root():
+# API information endpoint
+@app.get("/api/info")
+async def api_info():
     """API information"""
     return {
         "name": settings.APP_NAME,
@@ -105,7 +129,7 @@ async def root():
 
 # Serve static files if available
 try:
-    static_path = Path(__file__).resolve().parents[3] / "frontend"
+    static_path = Path(__file__).resolve().parents[2] / "frontend"
     if static_path.exists():
         app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
 except Exception as e:

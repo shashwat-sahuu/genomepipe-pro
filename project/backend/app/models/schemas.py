@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 # ============ Authentication Schemas ============
@@ -14,7 +14,8 @@ class UserRegisterRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=100)
     full_name: Optional[str] = None
 
-    @validator("password")
+    @field_validator("password")
+    @classmethod
     def validate_password(cls, v):
         """Validate password strength"""
         if not any(char.isupper() for char in v):
@@ -59,7 +60,7 @@ class SequenceUploadRequest(BaseModel):
     """Sequence file upload request"""
 
     file_name: str
-    sequence_type: str = Field(..., regex="^(DNA|RNA|PROTEIN)$")
+    sequence_type: str = Field(..., pattern="^(DNA|RNA|PROTEIN)$")
     description: Optional[str] = None
 
 
@@ -83,7 +84,7 @@ class AnalysisRequest(BaseModel):
     """Sequence analysis request"""
 
     sequence_data: str = Field(..., min_length=1, max_length=1000000)
-    job_type: str = Field(..., regex="^(DNA_ANALYSIS|TRANSLATION|ORF_DETECTION|FULL_PIPELINE)$")
+    job_type: str = Field(..., pattern="^(DNA_ANALYSIS|TRANSLATION|ORF_DETECTION|FULL_PIPELINE)$")
     description: Optional[str] = None
     include_reverse_complement: bool = False
     reading_frames: Optional[List[int]] = [1, 2, 3]
@@ -98,7 +99,7 @@ class AnalysisResultResponse(BaseModel):
     orfs: Optional[List[Dict[str, Any]]]
     gc_content: float
     sequence_length: int
-    translation_frames: Optional[Dict[int, str]]
+    translation_frames: Optional[Dict[str, str]]
     stop_codon_positions: List[int]
 
 
@@ -124,7 +125,7 @@ class StructurePredictionRequest(BaseModel):
     """Protein structure prediction request"""
 
     protein_sequence: str = Field(..., min_length=1, max_length=10000)
-    model: str = Field("ESMFold", regex="^(ESMFold|AlphaFold2)$")
+    model: str = Field("ESMFold", pattern="^(ESMFold|AlphaFold2)$")
     description: Optional[str] = None
 
 
