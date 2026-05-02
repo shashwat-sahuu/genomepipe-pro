@@ -326,7 +326,7 @@ async function runPipeline() {
   status.className = "loading";
 
   try {
-    const res = await fetch(`http://127.0.0.1:8000/process?dna=${dna}`, {
+    const res = await fetch(`/api/process?dna=${encodeURIComponent(dna)}`, {
       method: "POST"
     });
 
@@ -345,7 +345,7 @@ async function runPipeline() {
     status.textContent = "Rendering 3D structure…";
     document.getElementById("viewer-section").style.display = "block";
 
-    const pdbRes = await fetch(`http://127.0.0.1:8000/structure?dna=${dna}`, {
+    const pdbRes = await fetch(`/api/structure?dna=${encodeURIComponent(dna)}`, {
       method: "POST"
     });
     const pdbText = await pdbRes.text();
