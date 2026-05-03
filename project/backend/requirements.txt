@@ -6,13 +6,12 @@ python-dotenv==1.0.0
 # Async & Concurrency
 httpx==0.25.2
 aiofiles==23.2.1
-asyncio-contextmanager==1.0.0
 
 # Database
 sqlalchemy==2.0.23
 alembic==1.13.0
 psycopg2-binary==2.9.9
-redis==5.0.1
+redis==4.5.4
 
 # Bioinformatics
 biopython==1.81

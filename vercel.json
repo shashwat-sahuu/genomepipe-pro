@@ -1,11 +1,13 @@
 {
   "version": 2,
+  "buildCommand": "cd project/backend && pip install -r requirements.txt",
   "builds": [
     {
       "src": "project/backend/app/main.py",
       "use": "@vercel/python",
       "config": {
-        "runtime": "python3.11"
+        "runtime": "python3.11",
+        "maxLambdaSize": "50mb"
       }
     },
     {
@@ -17,5 +19,9 @@
     { "src": "^/api/(.*)$", "dest": "project/backend/app/main.py" },
     { "src": "^/$", "dest": "project/frontend/index.html" },
     { "src": "^/(.*)$", "dest": "project/frontend/$1" }
-  ]
+  ],
+  "env": {
+    "ENVIRONMENT": "production",
+    "DEBUG": "false"
+  }
 }

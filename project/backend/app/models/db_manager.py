@@ -23,6 +23,9 @@ class DatabaseManager:
     @classmethod
     def init_db(cls):
         """Initialize database engine and session factory"""
+        if cls._engine is not None:
+            return  # Already initialized
+            
         try:
             cls._engine = create_engine(
                 settings.DATABASE_URL,
@@ -51,6 +54,19 @@ class DatabaseManager:
                 bind=cls._engine
             )
 
+            logger.info("Database initialized successfully")
+        except OperationalError as e:
+            logger.warning(f"Database connection failed: {e}")
+            logger.warning("Running in no-database mode - authentication/persistence disabled")
+            cls._engine = None
+            cls._session_local = None
+        except Exception as e:
+            logger.error(f"Failed to initialize database: {e}")
+            cls._engine = None
+            cls._session_local = None
+                bind=cls._engine
+            )
+
             logger.info("Database engine initialized successfully")
 
         except Exception as e:
@@ -63,12 +79,16 @@ class DatabaseManager:
         if cls._engine is None:
             cls.init_db()
 
+        if cls._engine is None:
+            logger.warning("Skipping table creation - database not available")
+            return
+
         try:
             Base.metadata.create_all(bind=cls._engine)
             logger.info("Database tables created successfully")
         except Exception as e:
             logger.error(f"Failed to create tables: {e}")
-            raise
+            # Don't raise - allow app to continue without database
 
     @classmethod
     def get_session(cls) -> Session:
@@ -76,6 +96,9 @@ class DatabaseManager:
         if cls._session_local is None:
             cls.init_db()
 
+        if cls._session_local is None:
+            raise RuntimeError("Database not available - cannot create session")
+            
         return cls._session_local()
 
     @classmethod
@@ -116,11 +139,17 @@ class DatabaseManager:
 # FastAPI dependency for getting session
 def get_db() -> Generator[Session, None, None]:
     """FastAPI dependency: get database session"""
-    db = DatabaseManager.get_session()
     try:
+        db = DatabaseManager.get_session()
         yield db
-    finally:
-        db.close()
+        if db:
+            db.close()
+    except RuntimeError as e:
+        logger.warning(f"Database not available: {e}")
+        yield None
+    except Exception as e:
+        logger.error(f"Failed to get database session: {e}")
+        yield None
 
 
 # Initialize database on module load

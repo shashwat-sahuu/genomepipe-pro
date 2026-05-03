@@ -33,8 +33,13 @@ if settings.SENTRY_DSN:
 # Initialize upload directory
 init_upload_dir()
 
-# Initialize database
-DatabaseManager.create_tables()
+# Initialize database - handle connection failures gracefully
+try:
+    DatabaseManager.create_tables()
+    logger.info("Database initialized successfully")
+except Exception as e:
+    logger.warning(f"Database initialization failed: {e}")
+    logger.warning("Continuing without database - some features will be unavailable")
 
 # Create FastAPI application
 app = FastAPI(
@@ -80,6 +85,33 @@ async def log_requests(request: Request, call_next):
     response = await call_next(request)
     logger.info(f"Response status: {response.status_code}")
     return response
+
+# Health check endpoints
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "ok", "app": settings.APP_NAME, "version": settings.APP_VERSION}
+
+@app.get("/api/health")
+async def api_health_check():
+    """API health check endpoint"""
+    db_status = "ok"
+    try:
+        from app.models.db_manager import DatabaseManager
+        # Try to get a session to verify database connectivity
+        DatabaseManager.get_session()
+        db_status = "ok"
+    except Exception as e:
+        logger.warning(f"Database health check failed: {e}")
+        db_status = "unavailable"
+    
+    return {
+        "status": "ok",
+        "database": db_status,
+        "app": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT
+    }
 
 # Include routers
 app.include_router(sequence.router, prefix="/api", tags=["Sequence Analysis"])

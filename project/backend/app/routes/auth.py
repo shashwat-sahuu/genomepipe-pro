@@ -30,6 +30,12 @@ async def register(
     Returns:
         User information
     """
+    if db is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service is currently unavailable. Please try again later."
+        )
+        
     # Check if user already exists
     existing_user = db.query(User).filter(User.email == request.email).first()
     if existing_user:
@@ -84,6 +90,12 @@ async def login(
     Returns:
         JWT access and refresh tokens
     """
+    if db is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service is currently unavailable. Please try again later or use demo mode."
+        )
+        
     # Find user by email
     user = db.query(User).filter(User.email == request.email).first()
 
