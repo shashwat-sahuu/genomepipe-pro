@@ -7,31 +7,57 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
-
-from app.config import get_settings, init_upload_dir
-from app.routes import sequence, auth, upload, structure
-from app.models.schemas import ErrorResponse
-from app.models.db_manager import DatabaseManager
 
 logger = logging.getLogger(__name__)
-settings = get_settings()
+
+try:
+    from app.config import get_settings, init_upload_dir
+    settings = get_settings()
+    logger.info("Config loaded successfully")
+except Exception as e:
+    logger.error(f"Failed to load config: {e}", exc_info=True)
+    raise
+
+try:
+    from fastapi.staticfiles import StaticFiles
+    from slowapi import Limiter
+    from slowapi.util import get_remote_address
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    logger.info("Optional imports successful")
+except Exception as e:
+    logger.warning(f"Some optional imports failed: {e}")
+
+try:
+    from app.routes import sequence, auth, upload, structure
+    logger.info("Routes imported successfully")
+except Exception as e:
+    logger.error(f"Failed to import routes: {e}", exc_info=True)
+    
+try:
+    from app.models.db_manager import DatabaseManager
+    logger.info("DatabaseManager imported successfully")
+except Exception as e:
+    logger.error(f"Failed to import DatabaseManager: {e}", exc_info=True)
 
 # Initialize Sentry for error tracking
-if settings.SENTRY_DSN:
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        integrations=[FastApiIntegration()],
-        traces_sample_rate=0.1,
-        environment=settings.ENVIRONMENT,
-    )
+try:
+    if settings.SENTRY_DSN:
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            integrations=[FastApiIntegration()],
+            traces_sample_rate=0.1,
+            environment=settings.ENVIRONMENT,
+        )
+except Exception as e:
+    logger.warning(f"Sentry initialization failed: {e}")
 
 # Initialize upload directory
-init_upload_dir()
+try:
+    init_upload_dir()
+    logger.info("Upload directory initialized")
+except Exception as e:
+    logger.warning(f"Upload directory initialization failed: {e}")
 
 # Initialize database - handle connection failures gracefully
 try:
@@ -62,11 +88,17 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info(f"Shutting down {settings.APP_NAME}")
-    DatabaseManager.close()
+    try:
+        DatabaseManager.close()
+    except:
+        pass
 
 # Configure rate limiter
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
+try:
+    limiter = Limiter(key_func=get_remote_address)
+    app.state.limiter = limiter
+except Exception as e:
+    logger.warning(f"Rate limiter configuration failed: {e}")
 
 # Add CORS middleware
 app.add_middleware(
@@ -95,10 +127,9 @@ async def health_check():
 @app.get("/api/health")
 async def api_health_check():
     """API health check endpoint"""
-    db_status = "ok"
+    db_status = "unavailable"
     try:
         from app.models.db_manager import DatabaseManager
-        # Try to get a session to verify database connectivity
         DatabaseManager.get_session()
         db_status = "ok"
     except Exception as e:
@@ -114,10 +145,14 @@ async def api_health_check():
     }
 
 # Include routers
-app.include_router(sequence.router, prefix="/api", tags=["Sequence Analysis"])
-app.include_router(auth.router, prefix="/api", tags=["Authentication"])
-app.include_router(upload.router, prefix="/api", tags=["Sequences"])
-app.include_router(structure.router, prefix="/api", tags=["Structure Prediction"])
+try:
+    app.include_router(sequence.router, prefix="/api", tags=["Sequence Analysis"])
+    app.include_router(auth.router, prefix="/api", tags=["Authentication"])
+    app.include_router(upload.router, prefix="/api", tags=["Sequences"])
+    app.include_router(structure.router, prefix="/api", tags=["Structure Prediction"])
+    logger.info("All routers included successfully")
+except Exception as e:
+    logger.warning(f"Failed to include some routers: {e}")
 
 # Global exception handler
 @app.exception_handler(Exception)

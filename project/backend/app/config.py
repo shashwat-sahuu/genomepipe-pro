@@ -97,5 +97,9 @@ def get_settings() -> Settings:
 # Create upload directory if it doesn't exist
 def init_upload_dir():
     """Initialize upload directory"""
-    settings = get_settings()
-    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    try:
+        settings = get_settings()
+        os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    except Exception as e:
+        print(f"Warning: Could not create upload directory: {e}")
+        pass  # Continue without upload directory
