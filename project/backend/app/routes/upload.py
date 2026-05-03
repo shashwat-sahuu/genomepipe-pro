@@ -21,7 +21,6 @@ settings = get_settings()
 async def upload_sequence(
     file: UploadFile = File(...),
     description: Optional[str] = Form(None),
-    current_user: dict = Depends(SecurityService.get_current_user),
     db: Session = Depends(get_db)
 ) -> SequenceResponse:
     """
@@ -89,13 +88,24 @@ async def upload_sequence(
             c_count = sequence_upper.count('C')
             gc_content = ((g_count + c_count) / sequence_length * 100) if sequence_length > 0 else 0
 
-        # Create database record
-        user = db.query(User).filter(User.id == current_user["user_id"]).first()
-        if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        # Create database record - use demo user
+        # Get or create demo user
+        demo_user = db.query(User).filter(User.email == "demo@genomepipe.local").first()
+        if not demo_user:
+            from app.utils.security import SecurityService
+            demo_user = User(
+                email="demo@genomepipe.local",
+                username="demo_user",
+                password_hash=SecurityService.hash_password("demo_password_123"),
+                full_name="Demo User",
+                is_active=True
+            )
+            db.add(demo_user)
+            db.commit()
+            db.refresh(demo_user)
 
         sequence_record = Sequence(
-            user_id=user.id,
+            user_id=demo_user.id,
             name=first_seq['id'],
             sequence_type=sequence_type,
             sequence_data=sequence_data,
@@ -114,7 +124,7 @@ async def upload_sequence(
         db.commit()
         db.refresh(sequence_record)
 
-        logger.info(f"Sequence uploaded by {user.email}: {first_seq['id']} ({sequence_length} bp)")
+        logger.info(f"Sequence uploaded: {first_seq['id']} ({sequence_length} bp)")
 
         return SequenceResponse(
             id=sequence_record.id,
@@ -141,7 +151,6 @@ async def upload_sequence(
 async def list_sequences(
     skip: int = 0,
     limit: int = 20,
-    current_user: dict = Depends(SecurityService.get_current_user),
     db: Session = Depends(get_db)
 ) -> list[SequenceResponse]:
     """
@@ -154,8 +163,13 @@ async def list_sequences(
     if limit > 100:
         limit = 100
 
+    # Get demo user for listing sequences
+    demo_user = db.query(User).filter(User.email == "demo@genomepipe.local").first()
+    if not demo_user:
+        return []
+
     sequences = db.query(Sequence).filter(
-        Sequence.user_id == current_user["user_id"]
+        Sequence.user_id == demo_user.id
     ).offset(skip).limit(limit).all()
 
     return [
@@ -175,7 +189,6 @@ async def list_sequences(
 @router.get("/{sequence_id}", response_model=SequenceResponse)
 async def get_sequence(
     sequence_id: str,
-    current_user: dict = Depends(SecurityService.get_current_user),
     db: Session = Depends(get_db)
 ) -> SequenceResponse:
     """
@@ -184,9 +197,14 @@ async def get_sequence(
     Parameters:
     - sequence_id: ID of the sequence
     """
+    # Get demo user
+    demo_user = db.query(User).filter(User.email == "demo@genomepipe.local").first()
+    if not demo_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sequence not found")
+
     sequence = db.query(Sequence).filter(
         Sequence.id == sequence_id,
-        Sequence.user_id == current_user["user_id"]
+        Sequence.user_id == demo_user.id
     ).first()
 
     if not sequence:
@@ -209,7 +227,6 @@ async def get_sequence(
 @router.delete("/{sequence_id}")
 async def delete_sequence(
     sequence_id: str,
-    current_user: dict = Depends(SecurityService.get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -218,9 +235,14 @@ async def delete_sequence(
     Parameters:
     - sequence_id: ID of the sequence to delete
     """
+    # Get demo user
+    demo_user = db.query(User).filter(User.email == "demo@genomepipe.local").first()
+    if not demo_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sequence not found")
+
     sequence = db.query(Sequence).filter(
         Sequence.id == sequence_id,
-        Sequence.user_id == current_user["user_id"]
+        Sequence.user_id == demo_user.id
     ).first()
 
     if not sequence:

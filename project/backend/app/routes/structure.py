@@ -28,7 +28,6 @@ router = APIRouter(prefix="/structure", tags=["Structure Prediction"])
 async def predict_protein_structure(
     request: StructurePredictionRequest,
     background_tasks: BackgroundTasks,
-    current_user: dict = Depends(SecurityService.get_current_user),
     db: Session = Depends(get_db)
 ) -> dict:
     """
@@ -53,9 +52,24 @@ async def predict_protein_structure(
             detail=f"Protein sequence too long. Max: {settings.MAX_PROTEIN_LENGTH} amino acids"
         )
 
+    # Get or create demo user
+    from app.models.database import User
+    demo_user = db.query(User).filter(User.email == "demo@genomepipe.local").first()
+    if not demo_user:
+        demo_user = User(
+            email="demo@genomepipe.local",
+            username="demo_user",
+            password_hash=SecurityService.hash_password("demo_password_123"),
+            full_name="Demo User",
+            is_active=True
+        )
+        db.add(demo_user)
+        db.commit()
+        db.refresh(demo_user)
+
     # Create prediction record
     prediction = StructurePrediction(
-        user_id=current_user["user_id"],
+        user_id=demo_user.id,
         protein_sequence=request.protein_sequence,
         model_used=request.model,
         status=JobStatus.PENDING.value,
@@ -107,7 +121,6 @@ async def predict_protein_structure(
 @router.get("/{prediction_id}/status", response_model=StructurePredictionResponse)
 async def get_prediction_status(
     prediction_id: str,
-    current_user: dict = Depends(SecurityService.get_current_user),
     db: Session = Depends(get_db)
 ) -> StructurePredictionResponse:
     """
@@ -116,9 +129,15 @@ async def get_prediction_status(
     Returns:
         Prediction status and results (if completed)
     """
+    # Get demo user
+    from app.models.database import User
+    demo_user = db.query(User).filter(User.email == "demo@genomepipe.local").first()
+    if not demo_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prediction not found")
+
     prediction = db.query(StructurePrediction).filter(
         StructurePrediction.id == prediction_id,
-        StructurePrediction.user_id == current_user["user_id"]
+        StructurePrediction.user_id == demo_user.id
     ).first()
 
     if not prediction:
@@ -158,7 +177,6 @@ async def get_prediction_status(
 @router.get("/{prediction_id}/download")
 async def download_pdb_file(
     prediction_id: str,
-    current_user: dict = Depends(SecurityService.get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -167,9 +185,15 @@ async def download_pdb_file(
     Returns:
         PDB file as downloadable attachment
     """
+    # Get demo user
+    from app.models.database import User
+    demo_user = db.query(User).filter(User.email == "demo@genomepipe.local").first()
+    if not demo_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Prediction not found")
+
     prediction = db.query(StructurePrediction).filter(
         StructurePrediction.id == prediction_id,
-        StructurePrediction.user_id == current_user["user_id"]
+        StructurePrediction.user_id == demo_user.id
     ).first()
 
     if not prediction:
@@ -216,7 +240,6 @@ async def download_pdb_file(
 @router.post("/quick-predict")
 async def quick_predict_structure(
     protein_sequence: str,
-    current_user: dict = Depends(SecurityService.get_current_user),
 ) -> dict:
     """
     Quick synchronous structure prediction using mock data
@@ -248,7 +271,6 @@ async def quick_predict_structure(
 async def list_predictions(
     skip: int = 0,
     limit: int = 20,
-    current_user: dict = Depends(SecurityService.get_current_user),
     db: Session = Depends(get_db)
 ) -> list[StructurePredictionResponse]:
     """
@@ -261,8 +283,14 @@ async def list_predictions(
     if limit > 100:
         limit = 100
 
+    # Get demo user
+    from app.models.database import User
+    demo_user = db.query(User).filter(User.email == "demo@genomepipe.local").first()
+    if not demo_user:
+        return []
+
     predictions = db.query(StructurePrediction).filter(
-        StructurePrediction.user_id == current_user["user_id"]
+        StructurePrediction.user_id == demo_user.id
     ).offset(skip).limit(limit).all()
 
     return [
