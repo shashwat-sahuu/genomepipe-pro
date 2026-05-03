@@ -27,6 +27,13 @@ class DatabaseManager:
             return  # Already initialized
             
         try:
+            # Build connection arguments based on database type
+            connect_args = {}
+            if "sqlite" in settings.DATABASE_URL:
+                connect_args = {"check_same_thread": False, "timeout": 5}
+            else:
+                connect_args = {"connect_timeout": 5}
+            
             cls._engine = create_engine(
                 settings.DATABASE_URL,
                 poolclass=pool.QueuePool,
@@ -35,7 +42,7 @@ class DatabaseManager:
                 pool_pre_ping=True,
                 pool_recycle=3600,
                 echo=settings.DB_ECHO,
-                connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {}
+                connect_args=connect_args
             )
 
             # Add event listeners for connection pool
@@ -45,7 +52,7 @@ class DatabaseManager:
                 if "sqlite" not in settings.DATABASE_URL:
                     # Enable query logging for PostgreSQL
                     cursor = dbapi_conn.cursor()
-                    cursor.execute("SET statement_timeout = '30s'")
+                    cursor.execute("SET statement_timeout = '5s'")
                     cursor.close()
 
             cls._session_local = sessionmaker(
@@ -64,14 +71,6 @@ class DatabaseManager:
             logger.error(f"Failed to initialize database: {e}")
             cls._engine = None
             cls._session_local = None
-                bind=cls._engine
-            )
-
-            logger.info("Database engine initialized successfully")
-
-        except Exception as e:
-            logger.error(f"Failed to initialize database: {e}")
-            raise
 
     @classmethod
     def create_tables(cls):
