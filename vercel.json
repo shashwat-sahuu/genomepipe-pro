@@ -9,16 +9,10 @@
         "runtime": "python3.11",
         "maxLambdaSize": "50mb"
       }
-    },
-    {
-      "src": "project/frontend/**/*",
-      "use": "@vercel/static"
     }
   ],
   "routes": [
-    { "src": "^/api(/.*)?$", "dest": "/api/index.py" },
-    { "src": "^/$", "dest": "/project/frontend/index.html" },
-    { "src": "^/(.*)$", "dest": "/project/frontend/$1" }
+    { "src": "/(.*)", "dest": "/api/index.py" }
   ],
   "env": {
     "ENVIRONMENT": "production",
