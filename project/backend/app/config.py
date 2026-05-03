@@ -21,10 +21,10 @@ class Settings(BaseSettings):
     PORT: int = 8000
     RELOAD: bool = False
 
-    # Database
+    # Database - Use SQLite on Vercel, SQLite locally
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL",
-        "postgresql://postgres:password@localhost:5432/genomepipe",
+        "sqlite:///./genomepipe.db" if not os.getenv("VERCEL") else "sqlite:///tmp/genomepipe.db"
     )
     DB_ECHO: bool = False
 

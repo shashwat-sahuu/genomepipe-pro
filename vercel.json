@@ -16,7 +16,7 @@
     }
   ],
   "routes": [
-    { "src": "^/api/(.*)$", "dest": "/api/index.py" },
+    { "src": "^/api(/.*)?$", "dest": "/api/index.py" },
     { "src": "^/$", "dest": "/project/frontend/index.html" },
     { "src": "^/(.*)$", "dest": "/project/frontend/$1" }
   ],
