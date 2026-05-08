@@ -1,13 +1,14 @@
 {
   "version": 2,
-  "buildCommand": "cd project/backend && pip install -r requirements.txt",
+  "buildCommand": "pip install -r project/backend/requirements.txt",
   "builds": [
     {
       "src": "api/index.py",
       "use": "@vercel/python",
       "config": {
         "runtime": "python3.11",
-        "maxLambdaSize": "50mb"
+        "maxLambdaSize": "50mb",
+        "includeFiles": "project/backend/**"
       }
     }
   ],
@@ -16,6 +17,8 @@
   ],
   "env": {
     "ENVIRONMENT": "production",
-    "DEBUG": "false"
+    "DEBUG": "false",
+    "PYTHONPATH": "/var/task/project/backend"
   }
 }
+

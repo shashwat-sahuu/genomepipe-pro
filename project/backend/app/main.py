@@ -7,8 +7,13 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import datetime
 
 logger = logging.getLogger(__name__)
+
+# Track initialization status
+_initialized = False
+_init_error = None
 
 try:
     from app.config import get_settings, init_upload_dir
@@ -18,54 +23,38 @@ except Exception as e:
     logger.error(f"Failed to load config: {e}", exc_info=True)
     raise
 
+# Import optional dependencies
 try:
-    from fastapi.staticfiles import StaticFiles
     from slowapi import Limiter
     from slowapi.util import get_remote_address
+    HAS_SLOWAPI = True
+except Exception as e:
+    logger.warning(f"slowapi import failed: {e}")
+    HAS_SLOWAPI = False
+
+try:
     import sentry_sdk
     from sentry_sdk.integrations.fastapi import FastApiIntegration
-    logger.info("Optional imports successful")
+    HAS_SENTRY = True
 except Exception as e:
-    logger.warning(f"Some optional imports failed: {e}")
+    logger.warning(f"sentry_sdk import failed: {e}")
+    HAS_SENTRY = False
 
+# Import routes - these should not fail
 try:
     from app.routes import sequence, auth, upload, structure
     logger.info("Routes imported successfully")
 except Exception as e:
     logger.error(f"Failed to import routes: {e}", exc_info=True)
-    
+    raise
+
+# Import database manager - defer initialization
 try:
     from app.models.db_manager import DatabaseManager
     logger.info("DatabaseManager imported successfully")
 except Exception as e:
     logger.error(f"Failed to import DatabaseManager: {e}", exc_info=True)
-
-# Initialize Sentry for error tracking
-try:
-    if settings.SENTRY_DSN:
-        sentry_sdk.init(
-            dsn=settings.SENTRY_DSN,
-            integrations=[FastApiIntegration()],
-            traces_sample_rate=0.1,
-            environment=settings.ENVIRONMENT,
-        )
-except Exception as e:
-    logger.warning(f"Sentry initialization failed: {e}")
-
-# Initialize upload directory
-try:
-    init_upload_dir()
-    logger.info("Upload directory initialized")
-except Exception as e:
-    logger.warning(f"Upload directory initialization failed: {e}")
-
-# Initialize database - handle connection failures gracefully
-try:
-    DatabaseManager.create_tables()
-    logger.info("Database initialized successfully")
-except Exception as e:
-    logger.warning(f"Database initialization failed: {e}")
-    logger.warning("Continuing without database - some features will be unavailable")
+    raise
 
 # Create FastAPI application
 app = FastAPI(
@@ -76,29 +65,71 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
+# Initialize Sentry for error tracking (optional)
+if HAS_SENTRY:
+    try:
+        if settings.SENTRY_DSN:
+            sentry_sdk.init(
+                dsn=settings.SENTRY_DSN,
+                integrations=[FastApiIntegration()],
+                traces_sample_rate=0.1,
+                environment=settings.ENVIRONMENT,
+            )
+            logger.info("Sentry initialized successfully")
+    except Exception as e:
+        logger.warning(f"Sentry initialization failed: {e}")
 
-# Startup and shutdown events
+# Startup event - deferred initialization
 @app.on_event("startup")
 async def startup_event():
     """Initialize on startup"""
+    global _initialized, _init_error
+    
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
+    
+    try:
+        # Initialize upload directory
+        try:
+            init_upload_dir()
+            logger.info("Upload directory initialized")
+        except Exception as e:
+            logger.warning(f"Upload directory initialization failed: {e}")
+        
+        # Initialize database
+        try:
+            DatabaseManager.init_db()
+            DatabaseManager.create_tables()
+            logger.info("Database initialized successfully")
+        except Exception as e:
+            logger.warning(f"Database initialization failed: {e}")
+            logger.warning("Continuing without database - some features will be unavailable")
+        
+        _initialized = True
+        logger.info(f"{settings.APP_NAME} started successfully")
+    except Exception as e:
+        _init_error = str(e)
+        logger.error(f"Startup failed: {e}", exc_info=True)
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info(f"Shutting down {settings.APP_NAME}")
     try:
-        DatabaseManager.close()
-    except:
-        pass
+        # Close database connections if available
+        if hasattr(DatabaseManager, 'close'):
+            DatabaseManager.close()
+    except Exception as e:
+        logger.warning(f"Shutdown error: {e}")
 
-# Configure rate limiter
-try:
-    limiter = Limiter(key_func=get_remote_address)
-    app.state.limiter = limiter
-except Exception as e:
-    logger.warning(f"Rate limiter configuration failed: {e}")
+# Configure rate limiter (optional)
+if HAS_SLOWAPI:
+    try:
+        limiter = Limiter(key_func=get_remote_address)
+        app.state.limiter = limiter
+        logger.info("Rate limiter configured")
+    except Exception as e:
+        logger.warning(f"Rate limiter configuration failed: {e}")
 
 # Add CORS middleware
 app.add_middleware(
@@ -114,24 +145,33 @@ app.add_middleware(
 async def log_requests(request: Request, call_next):
     """Log all requests"""
     logger.info(f"{request.method} {request.url.path}")
-    response = await call_next(request)
-    logger.info(f"Response status: {response.status_code}")
-    return response
+    try:
+        response = await call_next(request)
+        logger.info(f"Response status: {response.status_code}")
+        return response
+    except Exception as e:
+        logger.error(f"Request error: {e}", exc_info=True)
+        raise
 
 # Health check endpoints
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "ok", "app": settings.APP_NAME, "version": settings.APP_VERSION}
+    return {
+        "status": "ok",
+        "app": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT
+    }
 
 @app.get("/api/health")
 async def api_health_check():
     """API health check endpoint"""
     db_status = "unavailable"
     try:
-        from app.models.db_manager import DatabaseManager
-        DatabaseManager.get_session()
-        db_status = "ok"
+        session = DatabaseManager.get_session()
+        if session:
+            db_status = "ok"
     except Exception as e:
         logger.warning(f"Database health check failed: {e}")
         db_status = "unavailable"
@@ -144,6 +184,20 @@ async def api_health_check():
         "environment": settings.ENVIRONMENT
     }
 
+# API information endpoint
+@app.get("/api/info")
+async def api_info():
+    """API information"""
+    return {
+        "name": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "description": "Advanced bioinformatics analysis platform",
+        "docs": "/docs",
+        "health": "/health",
+        "initialized": _initialized,
+        "error": _init_error,
+    }
+
 # Include routers
 try:
     app.include_router(sequence.router, prefix="/api", tags=["Sequence Analysis"])
@@ -152,7 +206,7 @@ try:
     app.include_router(structure.router, prefix="/api", tags=["Structure Prediction"])
     logger.info("All routers included successfully")
 except Exception as e:
-    logger.warning(f"Failed to include some routers: {e}")
+    logger.error(f"Failed to include routers: {e}", exc_info=True)
 
 # Global exception handler
 @app.exception_handler(Exception)
@@ -165,39 +219,18 @@ async def global_exception_handler(request: Request, exc: Exception):
             "status_code": 500,
             "error_type": "INTERNAL_SERVER_ERROR",
             "message": "An unexpected error occurred. Please try again later.",
-            "timestamp": str(__import__("datetime").datetime.utcnow()),
+            "timestamp": datetime.datetime.utcnow().isoformat(),
         }
     )
 
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    """Health check endpoint with system status"""
-    db_status = "healthy" if DatabaseManager.health_check() else "unhealthy"
-
-    return {
-        "status": "healthy",
-        "version": settings.APP_VERSION,
-        "environment": settings.ENVIRONMENT,
-        "database": db_status,
-    }
-
-# API information endpoint
-@app.get("/api/info")
-async def api_info():
-    """API information"""
-    return {
-        "name": settings.APP_NAME,
-        "version": settings.APP_VERSION,
-        "description": "Advanced bioinformatics analysis platform",
-        "docs": "/docs",
-        "health": "/health",
-    }
-
-# Serve static files if available
+# Serve static files if available (optional)
 try:
+    from fastapi.staticfiles import StaticFiles
     static_path = Path(__file__).resolve().parents[2] / "frontend"
     if static_path.exists():
         app.mount("/", StaticFiles(directory=static_path, html=True), name="static")
+        logger.info(f"Static files mounted from {static_path}")
 except Exception as e:
     logger.warning(f"Could not mount static files: {e}")
+
+logger.info("Application initialization complete")
