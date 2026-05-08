@@ -40,13 +40,39 @@ except Exception as e:
     logger.warning(f"sentry_sdk import failed: {e}")
     HAS_SENTRY = False
 
-# Import routes - these should not fail
+# Import routes - handle failures gracefully
+sequence = None
+auth = None
+upload = None
+structure = None
+
 try:
-    from app.routes import sequence, auth, upload, structure
-    logger.info("Routes imported successfully")
+    from app.routes import sequence as seq_router
+    sequence = seq_router
+    logger.info("Sequence routes imported")
 except Exception as e:
-    logger.error(f"Failed to import routes: {e}", exc_info=True)
-    raise
+    logger.error(f"Failed to import sequence routes: {e}", exc_info=True)
+
+try:
+    from app.routes import auth as auth_router
+    auth = auth_router
+    logger.info("Auth routes imported")
+except Exception as e:
+    logger.error(f"Failed to import auth routes: {e}", exc_info=True)
+
+try:
+    from app.routes import upload as upload_router
+    upload = upload_router
+    logger.info("Upload routes imported")
+except Exception as e:
+    logger.error(f"Failed to import upload routes: {e}", exc_info=True)
+
+try:
+    from app.routes import structure as structure_router
+    structure = structure_router
+    logger.info("Structure routes imported")
+except Exception as e:
+    logger.error(f"Failed to import structure routes: {e}", exc_info=True)
 
 # Import database manager - defer initialization
 try:
@@ -85,12 +111,12 @@ async def startup_event():
     """Initialize on startup"""
     global _initialized, _init_error
     
-    logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-    logger.info(f"Environment: {settings.ENVIRONMENT}")
-    
     try:
-        # Initialize upload directory
+        logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+        logger.info(f"Environment: {settings.ENVIRONMENT}")
+        
         try:
+            # Initialize upload directory
             init_upload_dir()
             logger.info("Upload directory initialized")
         except Exception as e:
@@ -98,9 +124,10 @@ async def startup_event():
         
         # Initialize database
         try:
-            DatabaseManager.init_db()
-            DatabaseManager.create_tables()
-            logger.info("Database initialized successfully")
+            if DatabaseManager:
+                DatabaseManager.init_db()
+                DatabaseManager.create_tables()
+                logger.info("Database initialized successfully")
         except Exception as e:
             logger.warning(f"Database initialization failed: {e}")
             logger.warning("Continuing without database - some features will be unavailable")
@@ -109,7 +136,8 @@ async def startup_event():
         logger.info(f"{settings.APP_NAME} started successfully")
     except Exception as e:
         _init_error = str(e)
-        logger.error(f"Startup failed: {e}", exc_info=True)
+        logger.error(f"Startup event failed: {e}", exc_info=True)
+        # Don't re-raise - allow app to continue running
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -199,14 +227,34 @@ async def api_info():
     }
 
 # Include routers
-try:
-    app.include_router(sequence.router, prefix="/api", tags=["Sequence Analysis"])
-    app.include_router(auth.router, prefix="/api", tags=["Authentication"])
-    app.include_router(upload.router, prefix="/api", tags=["Sequences"])
-    app.include_router(structure.router, prefix="/api", tags=["Structure Prediction"])
-    logger.info("All routers included successfully")
-except Exception as e:
-    logger.error(f"Failed to include routers: {e}", exc_info=True)
+if sequence:
+    try:
+        app.include_router(sequence.router, prefix="/api", tags=["Sequence Analysis"])
+    except Exception as e:
+        logger.warning(f"Failed to include sequence router: {e}")
+
+if auth:
+    try:
+        app.include_router(auth.router, prefix="/api", tags=["Authentication"])
+    except Exception as e:
+        logger.warning(f"Failed to include auth router: {e}")
+
+if upload:
+    try:
+        app.include_router(upload.router, prefix="/api", tags=["Sequences"])
+    except Exception as e:
+        logger.warning(f"Failed to include upload router: {e}")
+
+if structure:
+    try:
+        app.include_router(structure.router, prefix="/api", tags=["Structure Prediction"])
+    except Exception as e:
+        logger.warning(f"Failed to include structure router: {e}")
+
+if any([sequence, auth, upload, structure]):
+    logger.info("Routers included successfully")
+else:
+    logger.warning("No routers were included")
 
 # Global exception handler
 @app.exception_handler(Exception)
