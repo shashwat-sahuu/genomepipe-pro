@@ -1,0 +1,76 @@
+version: "3.9"
+
+services:
+
+  # ── GenomePipe Pro API ──────────────────────────────────────────────────────
+  api:
+    build: .
+    container_name: genomepipe_api
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - DB_PATH=data/genomepipe.db
+      - NCBI_API_KEY=${NCBI_API_KEY:-}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3}
+    volumes:
+      - ./data:/app/data          # persist SQLite DB
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - genomepipe
+
+  # ── Ollama (offline AI) ─────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: genomepipe_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama   # persist downloaded models
+    environment:
+      - OLLAMA_ORIGINS=*              # allow requests from the API container
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - genomepipe
+    # Uncomment to use an NVIDIA GPU:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # ── Model pull on first start ───────────────────────────────────────────────
+  ollama-setup:
+    image: ollama/ollama:latest
+    container_name: genomepipe_ollama_setup
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        ollama pull ${OLLAMA_MODEL:-llama3} &&
+        echo '✅ Model ready'
+      "
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    networks:
+      - genomepipe
+    restart: "no"
+
+volumes:
+  ollama_models:
+
+networks:
+  genomepipe:
+    driver: bridge
